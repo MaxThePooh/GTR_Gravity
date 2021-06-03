@@ -32,6 +32,6 @@ find_package(SFML 2.5.1 COMPONENTS system audio window graphics network REQUIRED
 link_libraries(yaml-cpp)
 link_libraries (sfml-graphics sfml-window sfml-system sfml-audio)
 
-file(COPY config.yaml DESTINATION ./)
+file(COPY config.yaml font.otf DESTINATION ./)
 
 add_executable(OTO_Gravity main.cpp ${src})

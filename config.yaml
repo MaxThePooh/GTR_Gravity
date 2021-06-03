@@ -1,0 +1,9 @@
+# halfAvailable | fullAvailable | partAvailable
+windowSize: partAvailable
+# or manual, null/~ if nothing
+MwindowSize: ~
+# 1000 usually
+dpInWindow: 1000
+antialiasingLevel: 2
+offset: 0.1
+fontFile: font.otf

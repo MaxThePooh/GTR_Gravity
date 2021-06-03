@@ -7,11 +7,24 @@
 
 #include "EventHandler.hpp"
 
+typedef sf::Vector2f   V2f;
+typedef sf::Vector2f&  V2fr;
+typedef sf::Vector2f&& V2frr;
+typedef const sf::Vector2f   cV2f;
+typedef const sf::Vector2f&  cV2fr;
+typedef const sf::Vector2f&& cV2frr;
+template<class T>
+T enclose(const T& x,const T& min,const T& max)
+{
+    return x<min?min:x>max?max:x;
+}
+
 template<class T>
 sf::Vector2<T> operator/(const sf::Rect<T>& rect,const double& t)
 {
     return sf::Vector2<T>(rect.width/t,rect.height/t);
 }
+
 template<class T>
 sf::Vector2<T> operator/(const sf::Vector2<T>& vec,const double& t)
 {
@@ -32,15 +45,25 @@ sf::Vector2<T> operator-(const sf::Vector2<T>& vec,const double& t)
 {
     return sf::Vector2<T>(vec.x-t,vec.y-t);
 }
-
-
 long double G(long double& x,long double& d)
 {
     return x/(d*d);
 }
+
 long double G(const long long int& x,const long long int& d)
 {
     return (double)x/(double)(d*d);
+}
+
+namespace {
+    void de_casteljau(cV2fr begin, cV2fr end, cV2fr clarifying,sf::VertexArray& array, const float& step) {
+        int stepCount=1.f/step;
+        for (int i = 0; i <= stepCount; ++i) {
+            V2f first=clarifying+(begin-clarifying)*(1.f-(float)i*step);
+            V2f second=clarifying+(end-clarifying)*((float)i*step);
+            array.append({{second+(first-second)*(1-i*step)},sf::Color::Black});
+        }
+    }
 }
 
 class App{
@@ -58,12 +81,7 @@ class App{
     typedef const std::string&  cstringr;
     typedef const std::string&& cstringrr;
 
-    typedef sf::Vector2f   V2f;
-    typedef sf::Vector2f&  V2fr;
-    typedef sf::Vector2f&& V2frr;
-    typedef const sf::Vector2f   cV2f;
-    typedef const sf::Vector2f&  cV2fr;
-    typedef const sf::Vector2f&& cV2frr;
+
 
     class MassObj{
     public:
@@ -131,14 +149,19 @@ class App{
     };
 
 public:
-    App(cflr windowSize,cstringr title,cuintr frameLimit,cuintr pointCount,const float& DP)
-    : window(new sf::RenderWindow(sf::VideoMode((uint)windowSize,(uint)windowSize),title))
+    App(cflr windowSize,cstringr title,cuintr frameLimit,const sf::ContextSettings& settings,cuintr pointCount,const float& DP, cflr _offset,
+        const sf::Font& font)
+    : window(new sf::RenderWindow(sf::VideoMode((uint)windowSize,(uint)windowSize),title,
+                                  sf::Style::Close,settings))
     , event(window)
     , WSize(windowSize)
     , PCount(pointCount)
     , Dp(DP)
     , DPWSize(windowSize/DP)
     , PixelsInDp(windowSize/(windowSize/Dp))
+    , offset(_offset)
+    , relativeCanvasSize(1 - 2 * _offset)
+    , mainFont(font)
     {
         window->setFramerateLimit(frameLimit);
 
@@ -150,14 +173,14 @@ public:
 
             for (int j = 0; j < pointCount; ++j) {
 
-                const float unitValue=(DPWSize*0.8f)/(PCount-1);
-                points[i][j]=Point(V2f(unitValue*i,unitValue*j)+DPWSize*0.1);
+                const float unitValue= (DPWSize * relativeCanvasSize) / (PCount - 1);
+                points[i][j]=Point(V2f(unitValue*i,unitValue*j)+DPWSize*offset);
             }
         }
 
 
 
-        obj.emplace_back(5000,V2f(dp(sf::Mouse::getPosition(*window))));
+        obj.emplace_back(2500,V2f(dp(sf::Mouse::getPosition(*window))));
     }
     ~App()
     {
@@ -200,7 +223,7 @@ public:
 
                     V2f relativeVec=object.getPos()-point.getPos();
                     const double d=sqrt(pow(relativeVec.x,2)+pow(relativeVec.y,2));
-                    long double attractionPower=G(object.getMass(),d);
+                    long double attractionPower= G(object.getMass(),d) * relativeCanvasSize;
                     attractionPower=attractionPower>1?1:attractionPower;
                     if(attractionPower>0.001)
                     point.setPos(point.getFPos()+relativeVec*attractionPower*factor);
@@ -220,8 +243,12 @@ private:
 
     Point** points;
     uint PCount;
+    float offset;
+    float relativeCanvasSize;
 
     std::vector<MassObj> obj;
+
+    sf::Font mainFont;
 
     void render()
     {
@@ -230,9 +257,24 @@ private:
         sf::VertexArray array(sf::PrimitiveType::Lines);
 
         for (int i = 0; i < PCount; ++i) {
+            sf::Text coordinates(std::to_string(i),mainFont,30);
+            coordinates.setFillColor(sf::Color::Black);
+            const float unitValue=DPWSize*relativeCanvasSize/(PCount-1);
+            coordinates.setOrigin(coordinates.getGlobalBounds()/2);
+
+            const float DPoffset=DPWSize*offset;
+            const float shift=DPoffset/4;
+            coordinates.setPosition(pix(sf::Vector2f(unitValue*i+DPoffset,unitValue-shift)));
+            window->draw(coordinates);
+            coordinates.setPosition(pix(sf::Vector2f(unitValue-shift,unitValue*i+DPoffset)));
+            window->draw(coordinates);
+
+
             for (int j = 0; j < PCount; ++j) {
                 Point& point=points[i][j];
-                sf::CircleShape temp(WSize/200);
+                uint r= DPWSize * relativeCanvasSize / 125;
+                r=r<1?1:r;
+                sf::CircleShape temp(r);
                 temp.setOrigin(temp.getGlobalBounds()/2);
                 temp.setFillColor(sf::Color::Black);
                 temp.setPosition(pix(point.getPos()));
@@ -244,14 +286,12 @@ private:
             for (int j = 0; j < PCount; ++j) {
                 Point& point=points[i][j];
                 array.append({pix(point.getPos()),sf::Color::Black});
-
             }
         }
         for (int i = 0; i < PCount; ++i) {
             for (int j = 1; j < PCount-1; ++j) {
                 Point& point=points[i][j];
                 array.append({pix(point.getPos()),sf::Color::Black});
-
             }
         }
         for (int i = 0; i < PCount; ++i) {
@@ -271,6 +311,7 @@ private:
         window->draw(array);
 
 
+
         window->display();
     }
 
@@ -279,8 +320,7 @@ private:
         return pix/Dp;
     }
 
-    [[nodiscard]] double pix(const double& dp) const
-    {
+    [[nodiscard]] double pix(const double& dp) const{
         return dp * PixelsInDp;
     }
 
@@ -298,23 +338,41 @@ private:
 };
 
 int main() {
+    YAML::Node config=YAML::LoadFile("config.yaml");
+
     sf::VideoMode fullScreen=sf::VideoMode::getFullscreenModes()[0];
     std::vector<sf::VideoMode> m=sf::VideoMode::getFullscreenModes();
-//    for(auto it=m.begin();it!=m.end();it++)
-//        std::cout<<"Parameters:\n"
-//                   "Width: " <<it->width<<"\n"
-//                   "Height: "<<it->height<<"\n"
-//                   "Pixels: "<<it->bitsPerPixel
-//                   <<std::endl<<std::endl;
-    float maxWindowSize=fullScreen.width<fullScreen.height?fullScreen.width:fullScreen.height;
 
-    float WindowSize=maxWindowSize/1.5f;
-    float dp=WindowSize/1000.f;
+    const float maxWindowSize=fullScreen.width<fullScreen.height?fullScreen.width:fullScreen.height;
+
+    float WindowSize=maxWindowSize;
+    if(!config["MwindowSize"].IsNull())
+        WindowSize=config["MwindowSize"].as<float>();
+    else
+    if(config["windowSize"].as<std::string>()=="halfAvailable")
+    {
+        WindowSize=maxWindowSize/2;
+    }else
+    if(config["windowSize"].as<std::string>()=="partAvailable")
+    {
+        WindowSize=maxWindowSize/1.5f;
+    }else
+    if(config["windowSize"].as<std::string>()=="fullAvailable")
+    {
+        WindowSize=maxWindowSize;
+    }
+
+    float dp=WindowSize/config["dpInWindow"].as<float>();
 
     std::cout<<"Window size: "<<WindowSize<<std::endl<<"Independent pixel: "<<dp<<std::endl;
 
+    const float offset=enclose(config["offset"].as<float>(),0.05f,0.4f);
+    sf::Font font;
+    font.loadFromFile(config["fontFile"].as<std::string>());
 
-    App app(WindowSize,"Gravity",30,10,dp);
+    sf::ContextSettings settings;
+    settings.antialiasingLevel=config["antialiasingLevel"].as<unsigned int>();
+    App app(WindowSize,"Gravity",30,settings,10,dp,offset,font);
     app.processing();
 
 
