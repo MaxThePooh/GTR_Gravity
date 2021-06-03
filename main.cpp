@@ -1,5 +1,6 @@
 #include <iostream>
 #include <vector>
+#include <cmath>
 #include "yaml-cpp/yaml.h"
 
 #include <SFML/Graphics.hpp>
@@ -13,6 +14,18 @@ typedef sf::Vector2f&& V2frr;
 typedef const sf::Vector2f   cV2f;
 typedef const sf::Vector2f&  cV2fr;
 typedef const sf::Vector2f&& cV2frr;
+
+template <class T>
+long double hypotenuse(const sf::Vector2<T>& t)
+{
+    return sqrt(t.x*t.x+t.y*t.y);
+}
+template <class T>
+long double hypotenuse(const T& t,const T& tt)
+{
+    return sqrt((long double)(t*t+tt*tt));
+}
+
 template<class T>
 T enclose(const T& x,const T& min,const T& max)
 {
@@ -45,6 +58,7 @@ sf::Vector2<T> operator-(const sf::Vector2<T>& vec,const double& t)
 {
     return sf::Vector2<T>(vec.x-t,vec.y-t);
 }
+
 long double G(long double& x,long double& d)
 {
     return x/(d*d);
@@ -52,12 +66,12 @@ long double G(long double& x,long double& d)
 
 long double G(const long long int& x,const long long int& d)
 {
-    return (double)x/(double)(d*d);
+    return (long double)x/(long double)(d*d);
 }
 
 namespace {
     void de_casteljau(cV2fr begin, cV2fr end, cV2fr clarifying,sf::VertexArray& array, const float& step) {
-        int stepCount=1.f/step;
+        int stepCount=(int)(1.f/step);
         for (int i = 0; i <= stepCount; ++i) {
             V2f first=clarifying+(begin-clarifying)*(1.f-(float)i*step);
             V2f second=clarifying+(end-clarifying)*((float)i*step);
@@ -222,9 +236,8 @@ public:
                     point.fix();
 
                     V2f relativeVec=object.getPos()-point.getPos();
-                    const double d=sqrt(pow(relativeVec.x,2)+pow(relativeVec.y,2));
-                    long double attractionPower= G(object.getMass(),d) * relativeCanvasSize;
-                    attractionPower=attractionPower>1?1:attractionPower;
+                    const double d=hypotenuse(relativeVec.x,relativeVec.y);
+                    const long double attractionPower= enclose(G(object.getMass(),d) * relativeCanvasSize,0.L,1.L);
                     if(attractionPower>0.001)
                     point.setPos(point.getFPos()+relativeVec*attractionPower*factor);
                 }
@@ -254,7 +267,6 @@ private:
     {
         window->clear(sf::Color::White);
 
-        sf::VertexArray array(sf::PrimitiveType::Lines);
 
         for (int i = 0; i < PCount; ++i) {
             sf::Text coordinates(std::to_string(i),mainFont,30);
@@ -284,31 +296,46 @@ private:
         }
         for (int i = 0; i < PCount; ++i) {
             for (int j = 0; j < PCount; ++j) {
-                Point& point=points[i][j];
-                array.append({pix(point.getPos()),sf::Color::Black});
-            }
-        }
-        for (int i = 0; i < PCount; ++i) {
-            for (int j = 1; j < PCount-1; ++j) {
-                Point& point=points[i][j];
-                array.append({pix(point.getPos()),sf::Color::Black});
-            }
-        }
-        for (int i = 0; i < PCount; ++i) {
-            for (int j = 0; j < PCount; ++j) {
-                Point& point=points[j][i];
-                array.append({pix(point.getPos()),sf::Color::Black});
+                if(j%2) {
+                    sf::VertexArray array(sf::PrimitiveType::LinesStrip);
+                    Point& point = points[i][j];
+                    Point& pointBefore = points[i][j - 1];
 
-            }
-        }
-        for (int i = 0; i < PCount; ++i) {
-            for (int j = 1; j < PCount-1; ++j) {
-                Point& point=points[j][i];
-                array.append({pix(point.getPos()),sf::Color::Black});
 
+                    V2f middle=(pointBefore.getPos()-point.getPos())*0.5+point.getPos();
+                    V2f relativeVec=obj.begin()->getPos()-middle;
+                    const double d=hypotenuse(relativeVec.x,relativeVec.y);
+                    const long double attractionPower= enclose(G(obj.begin()->getMass(),d) * relativeCanvasSize,0.L,1.L);
+                    if(attractionPower>0.001)
+                        middle=middle+relativeVec*attractionPower;
+
+                    de_casteljau(pix(pointBefore.getPos()), pix(point.getPos()),
+                                 pix(middle), array,0.1f);
+
+                    window->draw(array);
+                }
             }
         }
-        window->draw(array);
+//        for (int i = 0; i < PCount; ++i) {
+//            for (int j = 1; j < PCount-1; ++j) {
+//                Point& point=points[i][j];
+//                array.append({pix(point.getPos()),sf::Color::Black});
+//            }
+//        }
+//        for (int i = 0; i < PCount; ++i) {
+//            for (int j = 0; j < PCount; ++j) {
+//                Point& point=points[j][i];
+//                array.append({pix(point.getPos()),sf::Color::Black});
+//
+//            }
+//        }
+//        for (int i = 0; i < PCount; ++i) {
+//            for (int j = 1; j < PCount-1; ++j) {
+//                Point& point=points[j][i];
+//                array.append({pix(point.getPos()),sf::Color::Black});
+//
+//            }
+//        }
 
 
 
@@ -374,8 +401,6 @@ int main() {
     settings.antialiasingLevel=config["antialiasingLevel"].as<unsigned int>();
     App app(WindowSize,"Gravity",30,settings,10,dp,offset,font);
     app.processing();
-
-
 
     return 0;
 }
