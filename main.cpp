@@ -1,6 +1,8 @@
 #include <iostream>
 #include <vector>
 #include <cmath>
+#include <fstream>
+#include <iterator>
 #include "yaml-cpp/yaml.h"
 
 #include <SFML/Graphics.hpp>
@@ -157,6 +159,12 @@ class App{
             pos=fixedPos;
         }
 
+        Point& operator=(const Point& val)
+        {
+            pos=val.pos;
+            fixedPos=val.fixedPos;
+            return *this;
+        }
     private:
         sf::Vector2f pos;
         sf::Vector2f fixedPos;
@@ -170,6 +178,7 @@ public:
     , event(window)
     , WSize(windowSize)
     , PCount(pointCount)
+    , MPCount(pointCount-1)
     , Dp(DP)
     , DPWSize(windowSize/DP)
     , PixelsInDp(windowSize/(windowSize/Dp))
@@ -179,30 +188,64 @@ public:
     {
         window->setFramerateLimit(frameLimit);
 
-        points=new Point*[pointCount];
+        points=new Point*[PCount];
 
-        for (int i = 0; i < pointCount; ++i) {
+        for (int i = 0; i < PCount; ++i) {
 
-            points[i]=new Point[pointCount];
+            points[i]=new Point[PCount];
 
-            for (int j = 0; j < pointCount; ++j) {
+            for (int j = 0; j < PCount; ++j) {
 
                 const float unitValue= (DPWSize * relativeCanvasSize) / (PCount - 1);
                 points[i][j]=Point(V2f(unitValue*i,unitValue*j)+DPWSize*offset);
             }
         }
 
+        VerticalMiddles=new Point*[MPCount];
+
+        for(int i=0;i<MPCount;++i)
+        {
+            VerticalMiddles[i]=new Point[PCount];
+
+            for (int j = 0; j < PCount; ++j) {
+                Point& point=points[i][j];
+                Point& pointAfter=points[i+1][j];
+                VerticalMiddles[i][j]=Point((point.getFPos()-pointAfter.getFPos())*0.5+pointAfter.getFPos());
+            }
+        }
+
+        HorizontalMiddles=new Point*[PCount];
+
+        for(int i=0;i<PCount;++i)
+        {
+            HorizontalMiddles[i]=new Point[MPCount];
+
+            for (int j = 0; j < MPCount; ++j) {
+                Point& point=points[i][j];
+                Point& pointAfter=points[i][j+1];
+                HorizontalMiddles[i][j]=Point((point.getFPos()-pointAfter.getFPos())*0.5+pointAfter.getFPos());
+            }
+        }
 
 
-        obj.emplace_back(2500,V2f(dp(sf::Mouse::getPosition(*window))));
+
+        obj.emplace_back(5000,V2f(dp(sf::Mouse::getPosition(*window))));
     }
     ~App()
     {
-        delete window;
         for (int i = 0; i < PCount; ++i) {
-                delete points[i];
+            delete [] points[i];
         }
         delete [] points;
+
+        for(int i=0;i<MPCount;++i){
+            delete [] VerticalMiddles[i];
+            delete [] HorizontalMiddles[i];
+        }
+        delete [] VerticalMiddles;
+        delete [] HorizontalMiddles;
+
+        delete window;
     }
 
 
@@ -226,7 +269,7 @@ public:
     {
 
     }
-    void updateAttraction(cintr factor)
+    void updateAttraction(cflr factor)
     {
         for(auto object:obj)
         {
@@ -235,13 +278,33 @@ public:
                     Point& point=points[i][j];
                     point.fix();
 
-                    V2f relativeVec=object.getPos()-point.getPos();
-                    const double d=hypotenuse(relativeVec.x,relativeVec.y);
-                    const long double attractionPower= enclose(G(object.getMass(),d) * relativeCanvasSize,0.L,1.L);
-                    if(attractionPower>0.001)
-                    point.setPos(point.getFPos()+relativeVec*attractionPower*factor);
+                    move_according_to_G(point,object,factor);
                 }
             }
+
+            /*for (int i = 0; i < MPCount; ++i) {
+                for (int j = 0; j < PCount; ++j) {
+                    Point& point=points[i][j];
+                    Point& pointAfter=points[i+1][j];
+                    Point& middle=VerticalMiddles[i][j];
+
+                    middle.setPos((point.getFPos()-pointAfter.getFPos())*0.5+pointAfter.getFPos());
+//                    middle.fix();
+
+                    move_according_to_G(middle,object,factor);
+                }
+            }
+            for (int i = 0; i < PCount; ++i) {
+                for (int j = 0; j < MPCount; ++j) {
+                    Point& point=points[i][j];
+                    Point& pointAfter=points[i][j+1];
+                    Point& middle=HorizontalMiddles[j][i];
+
+                    middle.setPos((point.getFPos()-pointAfter.getFPos())*0.5+pointAfter.getFPos());
+
+                    move_according_to_G(middle,object,factor);
+                }
+            }*/
         }
     }
 
@@ -256,6 +319,10 @@ private:
 
     Point** points;
     uint PCount;
+    Point** VerticalMiddles;
+    Point** HorizontalMiddles;
+    uint MPCount;
+
     float offset;
     float relativeCanvasSize;
 
@@ -263,28 +330,38 @@ private:
 
     sf::Font mainFont;
 
+    void move_according_to_G(Point& point,const MassObj& object,cflr factor) const
+    {
+        V2f relativeVec=object.getPos()-point.getPos();
+        const long double d=hypotenuse(relativeVec.x,relativeVec.y);
+        const long double attractionPower= enclose(G(object.getMass(),d) * relativeCanvasSize,0.L,1.L);
+        if(attractionPower>0.001L)
+            point.setPos(point.getPos()+relativeVec*attractionPower*factor);
+    }
+
     void render()
     {
         window->clear(sf::Color::White);
 
 
         for (int i = 0; i < PCount; ++i) {
-            sf::Text coordinates(std::to_string(i),mainFont,30);
+            const float DPoffset=DPWSize*offset;
+
+            sf::Text coordinates(std::to_string(i),mainFont,pix(DPoffset/4));
             coordinates.setFillColor(sf::Color::Black);
             const float unitValue=DPWSize*relativeCanvasSize/(PCount-1);
             coordinates.setOrigin(coordinates.getGlobalBounds()/2);
 
-            const float DPoffset=DPWSize*offset;
-            const float shift=DPoffset/4;
-            coordinates.setPosition(pix(sf::Vector2f(unitValue*i+DPoffset,unitValue-shift)));
+            const float shift=pix(DPoffset*0.5f);
+            coordinates.setPosition(pix(sf::Vector2f(unitValue*i+DPoffset,shift)));
             window->draw(coordinates);
-            coordinates.setPosition(pix(sf::Vector2f(unitValue-shift,unitValue*i+DPoffset)));
+            coordinates.setPosition(pix(sf::Vector2f(shift,unitValue*i+DPoffset)));
             window->draw(coordinates);
 
 
             for (int j = 0; j < PCount; ++j) {
                 Point& point=points[i][j];
-                uint r= DPWSize * relativeCanvasSize / 125;
+                uint r= DPWSize * relativeCanvasSize / 12.5f /PCount;
                 r=r<1?1:r;
                 sf::CircleShape temp(r);
                 temp.setOrigin(temp.getGlobalBounds()/2);
@@ -294,50 +371,46 @@ private:
                 window->draw(temp);
             }
         }
-        for (int i = 0; i < PCount; ++i) {
+
+        for (int i = 0; i < MPCount; ++i) {
             for (int j = 0; j < PCount; ++j) {
-                if(j%2) {
-                    sf::VertexArray array(sf::PrimitiveType::LinesStrip);
-                    Point& point = points[i][j];
-                    Point& pointBefore = points[i][j - 1];
+                sf::VertexArray array(sf::PrimitiveType::LinesStrip);
+                Point& point = points[i][j];
+                Point& pointAfter = points[i+1][j];
+                Point& middle=VerticalMiddles[i][j];
+
+                de_casteljau(pix(point.getPos()), pix(pointAfter.getPos()),
+                             pix(middle.getPos()), array,0.1f);
 
 
-                    V2f middle=(pointBefore.getPos()-point.getPos())*0.5+point.getPos();
-                    V2f relativeVec=obj.begin()->getPos()-middle;
-                    const double d=hypotenuse(relativeVec.x,relativeVec.y);
-                    const long double attractionPower= enclose(G(obj.begin()->getMass(),d) * relativeCanvasSize,0.L,1.L);
-                    if(attractionPower>0.001)
-                        middle=middle+relativeVec*attractionPower;
+//                sf::CircleShape test(10);
+//                test.setOrigin(test.getGlobalBounds()/2);
+//                test.setFillColor(sf::Color::Red);
+//                test.setPosition(pix(middle.getFPos()));
+//                window->draw(test);
 
-                    de_casteljau(pix(pointBefore.getPos()), pix(point.getPos()),
-                                 pix(middle), array,0.1f);
-
-                    window->draw(array);
-                }
+                window->draw(array);
             }
         }
-//        for (int i = 0; i < PCount; ++i) {
-//            for (int j = 1; j < PCount-1; ++j) {
-//                Point& point=points[i][j];
-//                array.append({pix(point.getPos()),sf::Color::Black});
-//            }
-//        }
-//        for (int i = 0; i < PCount; ++i) {
-//            for (int j = 0; j < PCount; ++j) {
-//                Point& point=points[j][i];
-//                array.append({pix(point.getPos()),sf::Color::Black});
-//
-//            }
-//        }
-//        for (int i = 0; i < PCount; ++i) {
-//            for (int j = 1; j < PCount-1; ++j) {
-//                Point& point=points[j][i];
-//                array.append({pix(point.getPos()),sf::Color::Black});
-//
-//            }
-//        }
+        for (int i = 0; i < PCount; ++i) {
+            for (int j = 0; j < MPCount; ++j) {
+                sf::VertexArray array(sf::PrimitiveType::LinesStrip);
+                Point& point = points[i][j];
+                Point& pointAfter = points[i][j+1];
+                Point& middle=HorizontalMiddles[i][j];
 
+                de_casteljau(pix(point.getPos()), pix(pointAfter.getPos()),
+                             pix(middle.getPos()), array,0.1f);
 
+//                sf::CircleShape test(10);
+//                test.setOrigin(test.getGlobalBounds()/2);
+//                test.setFillColor(sf::Color::Red);
+//                test.setPosition(pix(middle.getFPos()));
+//                window->draw(test);
+
+                window->draw(array);
+            }
+        }
 
         window->display();
     }
@@ -401,6 +474,7 @@ int main() {
     settings.antialiasingLevel=config["antialiasingLevel"].as<unsigned int>();
     App app(WindowSize,"Gravity",30,settings,10,dp,offset,font);
     app.processing();
+
 
     return 0;
 }

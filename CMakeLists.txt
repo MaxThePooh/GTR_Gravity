@@ -15,7 +15,6 @@ link_directories(${SFML_LIBRARY_DIR})
 include_directories(${SFML_INCLUDE_DIR})
 
 
-
 set(YAML_DIR "${DOWNLOADS}/yaml-cpp-master")
 
 link_directories(${YAML_DIR}/build)
