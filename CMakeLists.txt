@@ -3,7 +3,7 @@ project(OTO_Gravity)
 
 set(CMAKE_CXX_STANDARD 17)
 
-add_compile_options(-v)
+add_compile_options(-v -static)
 
 set(DOWNLOADS "/Users/maxroschupkin/Downloads")
 
@@ -28,9 +28,20 @@ set(src AppSystem/EventHandler.cpp)
 
 find_package(SFML 2.5.1 COMPONENTS system audio window graphics network REQUIRED)
 
+
+
 link_libraries(yaml-cpp)
 link_libraries (sfml-graphics sfml-window sfml-system sfml-audio)
 
-file(COPY config.yaml font.otf DESTINATION ./)
 
-add_executable(OTO_Gravity main.cpp ${src})
+#set(CMAKE_MACOSX_BUNDLE TRUE)
+
+
+if(CMAKE_MACOSX_BUNDLE)
+    file(COPY config.yaml font.otf DESTINATION ./OTO_Gravity.app/Contents/Resources)
+else()
+    file(COPY config.yaml font.otf DESTINATION ./)
+endif()
+
+
+    add_executable(OTO_Gravity main.cpp ${src})

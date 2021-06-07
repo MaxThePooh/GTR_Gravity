@@ -3,6 +3,9 @@
 #include <cmath>
 #include <fstream>
 #include <iterator>
+#include <filesystem>
+#include <algorithm>
+
 #include "yaml-cpp/yaml.h"
 
 #include <SFML/Graphics.hpp>
@@ -16,6 +19,15 @@ typedef sf::Vector2f&& V2frr;
 typedef const sf::Vector2f   cV2f;
 typedef const sf::Vector2f&  cV2fr;
 typedef const sf::Vector2f&& cV2frr;
+
+template <class T>
+T translate(const T& Min,const T& Max,const T& toMin,const T& toMax,const T& value){
+    return ((value-Min)/(Max-Min))*(toMax-toMin)+toMin;
+}
+
+double translate(const double& Min,const double& Max,const double& toMin,const double& toMax,const double& value){
+    return ((value-Min)/(Max-Min))*(toMax-toMin)+toMin;
+}
 
 template <class T>
 long double hypotenuse(const sf::Vector2<T>& t)
@@ -159,20 +171,15 @@ class App{
             pos=fixedPos;
         }
 
-        Point& operator=(const Point& val)
-        {
-            pos=val.pos;
-            fixedPos=val.fixedPos;
-            return *this;
-        }
+        Point& operator=(const Point& val)=default;
     private:
         sf::Vector2f pos;
         sf::Vector2f fixedPos;
     };
 
 public:
-    App(cflr windowSize,cstringr title,cuintr frameLimit,const sf::ContextSettings& settings,cuintr pointCount,const float& DP, cflr _offset,
-        const sf::Font& font)
+    App(cflr windowSize,cstringr title,cuintr frameLimit,const sf::ContextSettings& settings,
+        cuintr pointCount,const float& DP, cflr _offset,const sf::Font& font)
     : window(new sf::RenderWindow(sf::VideoMode((uint)windowSize,(uint)windowSize),title,
                                   sf::Style::Close,settings))
     , event(window)
@@ -185,6 +192,7 @@ public:
     , offset(_offset)
     , relativeCanvasSize(1 - 2 * _offset)
     , mainFont(font)
+    , unitValue((DPWSize * relativeCanvasSize) / (float)(PCount - 1))
     {
         window->setFramerateLimit(frameLimit);
 
@@ -196,7 +204,6 @@ public:
 
             for (int j = 0; j < PCount; ++j) {
 
-                const float unitValue= (DPWSize * relativeCanvasSize) / (PCount - 1);
                 points[i][j]=Point(V2f(unitValue*i,unitValue*j)+DPWSize*offset);
             }
         }
@@ -229,7 +236,7 @@ public:
 
 
 
-        obj.emplace_back(5000,V2f(dp(sf::Mouse::getPosition(*window))));
+        obj.emplace_back(7500,V2f(dp(sf::Mouse::getPosition(*window))));
     }
     ~App()
     {
@@ -257,9 +264,9 @@ public:
             event.pollEvent();
             if(event.happened(sf::Event::Closed))
                 window->close();
-            if(event.happened(sf::Event::Resized))
-                std::cout<<window->getSize().y;
+
             obj.begin()->setPos(dp(sf::Mouse::getPosition(*window)));
+
             updateAttraction(1);
             render();
         }
@@ -282,29 +289,24 @@ public:
                 }
             }
 
-            /*for (int i = 0; i < MPCount; ++i) {
+            for (int i = 0; i < MPCount; ++i) {
                 for (int j = 0; j < PCount; ++j) {
-                    Point& point=points[i][j];
-                    Point& pointAfter=points[i+1][j];
                     Point& middle=VerticalMiddles[i][j];
 
-                    middle.setPos((point.getFPos()-pointAfter.getFPos())*0.5+pointAfter.getFPos());
-//                    middle.fix();
+                    middle.fix();
 
                     move_according_to_G(middle,object,factor);
                 }
             }
             for (int i = 0; i < PCount; ++i) {
                 for (int j = 0; j < MPCount; ++j) {
-                    Point& point=points[i][j];
-                    Point& pointAfter=points[i][j+1];
-                    Point& middle=HorizontalMiddles[j][i];
+                    Point& middle=HorizontalMiddles[i][j];
 
-                    middle.setPos((point.getFPos()-pointAfter.getFPos())*0.5+pointAfter.getFPos());
+                    middle.fix();
 
                     move_according_to_G(middle,object,factor);
                 }
-            }*/
+            }
         }
     }
 
@@ -325,6 +327,7 @@ private:
 
     float offset;
     float relativeCanvasSize;
+    float unitValue;
 
     std::vector<MassObj> obj;
 
@@ -336,7 +339,7 @@ private:
         const long double d=hypotenuse(relativeVec.x,relativeVec.y);
         const long double attractionPower= enclose(G(object.getMass(),d) * relativeCanvasSize,0.L,1.L);
         if(attractionPower>0.001L)
-            point.setPos(point.getPos()+relativeVec*attractionPower*factor);
+            point.setPos(point.getPos()+relativeVec*attractionPower*factor*unitValue/20.f);
     }
 
     void render()
@@ -349,7 +352,6 @@ private:
 
             sf::Text coordinates(std::to_string(i),mainFont,pix(DPoffset/4));
             coordinates.setFillColor(sf::Color::Black);
-            const float unitValue=DPWSize*relativeCanvasSize/(PCount-1);
             coordinates.setOrigin(coordinates.getGlobalBounds()/2);
 
             const float shift=pix(DPoffset*0.5f);
@@ -382,13 +384,6 @@ private:
                 de_casteljau(pix(point.getPos()), pix(pointAfter.getPos()),
                              pix(middle.getPos()), array,0.1f);
 
-
-//                sf::CircleShape test(10);
-//                test.setOrigin(test.getGlobalBounds()/2);
-//                test.setFillColor(sf::Color::Red);
-//                test.setPosition(pix(middle.getFPos()));
-//                window->draw(test);
-
                 window->draw(array);
             }
         }
@@ -401,12 +396,6 @@ private:
 
                 de_casteljau(pix(point.getPos()), pix(pointAfter.getPos()),
                              pix(middle.getPos()), array,0.1f);
-
-//                sf::CircleShape test(10);
-//                test.setOrigin(test.getGlobalBounds()/2);
-//                test.setFillColor(sf::Color::Red);
-//                test.setPosition(pix(middle.getFPos()));
-//                window->draw(test);
 
                 window->draw(array);
             }
@@ -437,13 +426,25 @@ private:
     }
 };
 
-int main() {
+int main(int args,char** argv) {
+#ifdef TARGET_OS_MAC
+    std::string path=argv[0];
+    while(path.back()!='/')
+        path.erase(path.end()-1);
+    path.erase(path.end()-1);
+    std::cout<<path<<std::endl;
+
+    std::filesystem::current_path(path);
+#endif
+
+
     YAML::Node config=YAML::LoadFile("config.yaml");
 
     sf::VideoMode fullScreen=sf::VideoMode::getFullscreenModes()[0];
     std::vector<sf::VideoMode> m=sf::VideoMode::getFullscreenModes();
 
     const float maxWindowSize=fullScreen.width<fullScreen.height?fullScreen.width:fullScreen.height;
+
 
     float WindowSize=maxWindowSize;
     if(!config["MwindowSize"].IsNull())
@@ -466,13 +467,24 @@ int main() {
 
     std::cout<<"Window size: "<<WindowSize<<std::endl<<"Independent pixel: "<<dp<<std::endl;
 
-    const float offset=enclose(config["offset"].as<float>(),0.05f,0.4f);
-    sf::Font font;
-    font.loadFromFile(config["fontFile"].as<std::string>());
+    unsigned int frameLimit=30;
+    if(!config["frameLimit"].IsNull())
+        frameLimit=config["frameLimit"].as<unsigned int>();
+
 
     sf::ContextSettings settings;
     settings.antialiasingLevel=config["antialiasingLevel"].as<unsigned int>();
-    App app(WindowSize,"Gravity",30,settings,10,dp,offset,font);
+
+    unsigned int pointCount=10;
+    if(!config["pointCount"].IsNull())
+        pointCount=config["pointCount"].as<unsigned int>();
+
+    const float offset=enclose(config["offset"].as<float>(),0.05f,0.4f);
+
+    sf::Font font;
+    font.loadFromFile(config["fontFile"].as<std::string>());
+
+    App app(WindowSize,"Gravity",frameLimit,settings,pointCount,dp,offset,font);
     app.processing();
 
 

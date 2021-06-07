@@ -4,9 +4,15 @@ windowSize: partAvailable
 MwindowSizeComment: "or manual null/~ if nothing"
 MwindowSize: ~
 
+frameLimit: ~
+
+antialiasingLevel: 2
+
+pointCount: 10
+
 dpInWindowComment: "1000 usually"
 dpInWindow: 1000
 
-antialiasingLevel: 2
 offset: 0.1
+
 fontFile: font.otf
