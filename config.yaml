@@ -1,14 +1,14 @@
 windowSizeComment: "halfAvailable | fullAvailable | partAvailable"
 windowSize: partAvailable
 
-MwindowSizeComment: "or manual null/~ if nothing"
+MwindowSizeComment: "or manual. ~ if default"
 MwindowSize: ~
 
 frameLimit: ~
 
 antialiasingLevel: 2
 
-pointCount: 10
+pointCount: ~
 
 dpInWindowComment: "1000 usually"
 dpInWindow: 1000

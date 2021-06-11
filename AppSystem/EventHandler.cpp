@@ -26,6 +26,9 @@ void EventHandler::pollEvent() {
         for(std::multimap<sf::Event::EventType,Subscriber*>::iterator it=subscribers.lower_bound(event.type);
             it!=subscribers.upper_bound(event.type);it++)
             it->second->notify(event.type);
+        for(std::vector<Subscriber*>::iterator it=universalSubs.begin();
+            it!=universalSubs.end();it++)
+            (*it)->notify(event.type);
 
         /*///////////////////////////////////*/
         if(event.type==sf::Event::KeyPressed)
@@ -53,6 +56,9 @@ void EventHandler::waitEvent() {
         for(std::multimap<sf::Event::EventType,Subscriber*>::iterator it=subscribers.lower_bound(event.type);
             it!=subscribers.upper_bound(event.type);it++)
             it->second->notify(event.type);
+        for(std::vector<Subscriber*>::iterator it=universalSubs.begin();
+            it!=universalSubs.end();it++)
+            (*it)->notify(event.type);
 
         /*///////////////////////////////////*/
         if(event.type==sf::Event::KeyPressed)
@@ -104,6 +110,12 @@ void EventHandler::clearSub(EventHandler::Subscriber *deletingSub) {
             it=subscribers.erase(it);
         else
             it++;
+    for(std::vector<Subscriber*>::iterator it=universalSubs.begin();
+        it!=universalSubs.end();)
+        if(*it==deletingSub)
+            it=universalSubs.erase(it);
+        else
+            it++;
 }
 
 void EventHandler::Subscribe(const sf::Event::EventType &listenTo, EventHandler::Subscriber *newSub) {
@@ -120,5 +132,9 @@ void EventHandler::Subscribe(EventHandler::Subscriber *newSub, unsigned int num,
 
 const sf::Keyboard::Key& EventHandler::getCode() {
     return event.key.code;
+}
+
+void EventHandler::SubscribeAll(EventHandler::Subscriber* newSub) {
+    universalSubs.emplace_back(newSub);
 }
 

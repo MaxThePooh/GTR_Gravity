@@ -44,6 +44,9 @@ public:
 
     void Subscribe(const sf::Event::EventType& listenTo,Subscriber* newSub);
 
+    ///To unsubscribe use clearSub func
+    void SubscribeAll(Subscriber* newSub);
+
 
     void UnSubscribe(Subscriber* oldSub,unsigned int num,...);
 
@@ -59,6 +62,7 @@ private:
     sf::Event event;
     sf::Window* window;
     std::multimap<sf::Event::EventType,Subscriber*> subscribers;
+    std::vector<Subscriber*> universalSubs;
     std::map<sf::Event::EventType,bool> events;
     std::map<sf::Keyboard::Key,bool> PressedKeys;
 };
