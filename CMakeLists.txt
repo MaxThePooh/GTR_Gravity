@@ -36,11 +36,12 @@ link_libraries (sfml-graphics sfml-window sfml-system sfml-audio)
 
 #set(CMAKE_MACOSX_BUNDLE TRUE)
 
+set(SRC config.yaml font.otf visual.yaml)
 
 if(CMAKE_MACOSX_BUNDLE)
-    file(COPY config.yaml font.otf DESTINATION ./OTO_Gravity.app/Contents/Resources)
+    file(COPY ${SRC} DESTINATION ./OTO_Gravity.app/Contents/MacOS)
 else()
-    file(COPY config.yaml font.otf DESTINATION ./)
+    file(COPY ${SRC} DESTINATION ./)
 endif()
 
 
