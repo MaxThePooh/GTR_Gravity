@@ -31,6 +31,11 @@ long double hypotenuse(const T& t,const T& tt)
 {
     return sqrt((long double)(t*t+tt*tt));
 }
+template<class T>
+long double hypotenuse(const sf::Vector2<T>& t,const sf::Vector2<T>& tt)
+{
+    return hypotenuse(t.x-tt.x,t.y-tt.y);
+}
 
 template<class T>
 bool inCircle(const sf::Vector2<T>& point, const sf::Vector2<T>& pos, const T& radius){  // 19.1, 19.1, 19.1
@@ -50,7 +55,7 @@ bool circleIntersects(const sf::Vector2<T>& Pos1,const double& r1,const sf::Vect
 template<class T>
 std::basic_string<T>& remove_zeros(std::basic_string<T>& str)
 {
-    if(str.empty()) {
+    if(!str.empty()) {
         str.erase(std::find_if(str.rbegin(), str.rend(), [](const char& c) {
             return c != '0';
         }).base(), str.end());
@@ -70,7 +75,7 @@ std::basic_string<T>& remove_zeros(std::basic_string<T>& str)
 template<class T>
 std::basic_string<T>& remove_zeros(std::basic_string<T>&& str)
 {
-    if(str.empty()) {
+    if(!str.empty()) {
         str.erase(std::find_if(str.rbegin(), str.rend(), [](const char& c) {
             return c != '0';
         }).base(), str.end());
@@ -428,10 +433,22 @@ public:
                         break;
                     case sf::Keyboard::D:
                     case sf::Keyboard::Delete:
-                        if(pickedObj!= nullptr) {
+                        if (pickedObj != nullptr) {
                             obj.erase(std::find(obj.begin(), obj.end(), *pickedObj));
                             pickedObj = nullptr;
                         }
+                        break;
+                    case sf::Keyboard::H:
+                        if (!obj.empty()) {
+                            if (pickedObj == nullptr) {
+                                pickedObj = &*obj.begin();
+                            } else {
+                                std::vector<MassObj>::iterator it = std::find(obj.begin(), obj.end(),
+                                                                              *pickedObj);
+                                pickedObj = &*(it + 1 == obj.end() || it==obj.end()? obj.begin() : it + 1);
+                            }
+                        }
+                        pickedObjectChanged();
                         break;
                 }
                 break;
@@ -549,7 +566,6 @@ private:
     sf::Vector2f pixasPointPos(cV2fr regPos) const{
         return (regPos-WSize*offset)/pix(unitValue);
     }
-
     sf::Vector2f dpasPointPos(cV2fr regPos) const{
         return (regPos-DPWSize*offset)/unitValue;
     }
@@ -564,15 +580,18 @@ private:
         V2f leftdownP =pix(points[flx]  [cy].getPos());
         V2f rightdownP=pix(points [cx]  [cy].getPos());
 
-        V2f truncv={ptPos.x-trunc(ptPos.x),ptPos.y- trunc(ptPos.y)};
+        float xf=ptPos.x-trunc(ptPos.x);
+        float yf=ptPos.y- trunc(ptPos.y);
+
         V2f leftSide=(leftdownP-leftupP);
         V2f rightSide=(rightdownP-rightupP);
         V2f downSide=(rightdownP-leftdownP);
         V2f upSide=(rightupP-leftupP);
 
-        float movingx=upSide.x* (truncv.x)+rightSide.x*(truncv.y);
-        float movingy=leftSide.y* truncv.y+downSide.y*(truncv.x);
+        float movingx= ((rightSide.x*yf -leftSide.x*yf+upSide.x)*xf)+leftSide.x*yf;
+        float movingy= ((downSide.y*xf -upSide.y*xf+leftSide.y)*yf)+upSide.y*xf;
         return {leftupP.x+movingx,leftupP.y+movingy};
+
     }
     sf::Vector2f asRegPosDP(cV2fr ptPos) const{
         return dp(asRegPos(ptPos));
@@ -586,7 +605,7 @@ private:
 
     void move_according_to_G(Point& point,const MassObj& object,cflr factor) const
     {
-        const V2f relativeVec= asRegPosDP(object.getPos())-point.getPos();
+        const V2f relativeVec= asRegFPosDP(object.getPos())-point.getPos();
         const long double d=hypotenuse(relativeVec.x,relativeVec.y);
         const long double attractionPower= enclose(G(object.getMass(),d)/PCount*10.f * relativeCanvasSize,0.L,1.L);
         if(attractionPower>0.001L)
@@ -696,7 +715,7 @@ private:
                         else if(std::find_if(vstr.begin(),vstr.end(),[](const wchar_t& c){ return c==L'.';})!=vstr.end()-1)
                             vstr.pop_back();
                     }
-                    remove_zeros(vstr);
+//                    remove_zeros(vstr);
                     if(vstr.front()==L'.')
                         vstr.erase(vstr.begin());
                     if(vstr.empty() || vstr.size()==1 && vstr.front()==L'-')
@@ -734,7 +753,7 @@ private:
                         else if(std::find_if(vstr.begin(),vstr.end(),[](const wchar_t& c){ return c==L'.';})!=vstr.end()-1)
                             vstr.pop_back();
                     }
-                    remove_zeros(vstr);
+//                    remove_zeros(vstr);
                     if(vstr.front()==L'.')
                         vstr.erase(vstr.begin());
                     if(vstr.empty() || vstr.size()==1 && vstr.front()==L'-')
@@ -750,6 +769,22 @@ private:
             }
     }
 
+    void pickedObjectChanged()
+    {
+        if(pickedObj!= nullptr) {
+            info["massInfo"].setString(visual["defaultStrings"]["mass"].as<std::string>() +
+                                       remove_zeros(std::to_string(pickedObj->getMass())));
+            info["XmvspInfo"].setString(visual["defaultStrings"]["xmovesp"].as<std::string>() +
+                                        remove_zeros(std::to_string(pickedObj->getMoveSpeed().x)));
+            info["YmvspInfo"].setString(visual["defaultStrings"]["ymovesp"].as<std::string>() +
+                                        remove_zeros(std::to_string(pickedObj->getMoveSpeed().y)));
+            info["YmvspInfo"].setPosition(
+                    V2f(info["XmvspInfo"].getPosition().x + info["XmvspInfo"].getGlobalBounds().width +
+                        info["XmvspInfo"].getCharacterSize(),
+                        info["XmvspInfo"].getPosition().y));
+        }
+    }
+
     void leftClick()
     {
         V2f mousePos(sf::Mouse::getPosition(*window));
@@ -757,6 +792,7 @@ private:
         for(MassObj& object:obj) {
             if(inCircle(V2f (mousePos), asRegPos(object.getPos()),objectRadius)) {
                 pickedObj = &object;
+                pickedObjectChanged();
                 pickedOnThisFrame=true;
                 return;
             }
@@ -775,9 +811,6 @@ private:
     {
         if(pickedObj== nullptr)
             pickedText== nullptr;
-//        else
-//            if(sf::Mouse::isButtonPressed(sf::Mouse::Button::Left) && pickedOnThisFrame)
-//                pickedObj->setPos(pixasPointPos(V2f(sf::Mouse::getPosition(*window))));
             for(MassObj& object:obj)
             {
                 object.setPos(object.getPos()+object.getMoveSpeed());
@@ -968,6 +1001,5 @@ int main(int args,char** argv) {
 
     App app(WindowSize,"Gravity",frameLimit,settings,pointCount,dp,offset,font);
     app.processing();
-
     return 0;
 }
